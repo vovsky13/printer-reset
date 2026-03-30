@@ -3,15 +3,22 @@ import { resetWasteInk as epsonReset } from './epson.js';
 import { resetWasteInk as canonReset } from './canon.js';
 
 // --- DOM ---
-const btnAdd      = document.getElementById('btn-add');
-const btnScan     = document.getElementById('btn-scan');
-const btnReset    = document.getElementById('btn-reset');
-const btnResetAll = document.getElementById('btn-reset-all');
-const printerList = document.getElementById('printer-list');
-const logEl       = document.getElementById('log');
-const statusEl    = document.getElementById('status');
-const noUsb       = document.getElementById('no-usb');
-const webUsbBlock = document.getElementById('webusbblock');
+const btnAdd       = document.getElementById('btn-add');
+const btnScan      = document.getElementById('btn-scan');
+const btnReset     = document.getElementById('btn-reset');
+const btnResetAll  = document.getElementById('btn-reset-all');
+const printerList  = document.getElementById('printer-list');
+const logEl        = document.getElementById('log');
+const statusEl     = document.getElementById('status');
+const noUsb        = document.getElementById('no-usb');
+const webUsbBlock  = document.getElementById('webusbblock');
+const progressCard = document.getElementById('progress-card');
+const progressBar  = document.getElementById('progress-bar');
+const progressLbl  = document.getElementById('progress-label');
+const resultCard   = document.getElementById('result-card');
+const resultIcon   = document.getElementById('result-icon');
+const resultTitle  = document.getElementById('result-title');
+const resultSub    = document.getElementById('result-sub');
 
 // --- State ---
 let printers = [];  // { device, name, id }
@@ -121,16 +128,50 @@ btnScan.addEventListener('click', async () => {
 });
 
 // --- Reset ---
+function showProgress(label, pct) {
+  progressCard.style.display = 'block';
+  resultCard.style.display = 'none';
+  progressLbl.textContent = label;
+  progressBar.style.width = pct + '%';
+}
+
+function showResult(ok, fail) {
+  progressCard.style.display = 'none';
+  resultCard.style.display = 'block';
+  resultCard.className = 'card result-card ' + (fail === 0 ? 'result-success' : 'result-error');
+
+  if (fail === 0) {
+    resultIcon.textContent  = '✅';
+    resultTitle.textContent = `Счётчик сброшен на ${ok} принтере(ах)!`;
+    resultSub.textContent   = 'Выключите принтер, подождите 10 секунд и включите снова.';
+  } else {
+    resultIcon.textContent  = '❌';
+    resultTitle.textContent = `Ошибок: ${fail}, успешно: ${ok}`;
+    resultSub.textContent   = 'Смотрите лог операций для деталей.';
+  }
+}
+
 async function doReset(targets) {
   clearLog();
+  resultCard.style.display = 'none';
   [btnAdd, btnScan, btnReset, btnResetAll].forEach(b => b.disabled = true);
 
   let ok = 0, fail = 0;
+  const total = targets.length;
 
-  for (const p of targets) {
+  for (let i = 0; i < targets.length; i++) {
+    const p = targets[i];
+    const pct = Math.round((i / total) * 90);
+    showProgress(`Сброс: ${p.name}`, pct);
     log(`\n▶ ${p.name}`, 'header');
     setStatus(`Сброс: ${p.name}`);
-    const logFn = msg => log(`  ${msg}`);
+
+    const logFn = msg => {
+      log(`  ${msg}`);
+      // Плавно двигаем прогресс внутри одного принтера
+      progressLbl.textContent = msg.trim();
+    };
+
     try {
       if (p.device.vendorId === EPSON_VID) {
         await epsonReset(p.device, logFn);
@@ -145,17 +186,15 @@ async function doReset(targets) {
     }
   }
 
+  showProgress('Завершено', 100);
+  await new Promise(r => setTimeout(r, 500));
+
   log(`\nИтог: успешно ${ok}, ошибок ${fail}.`, fail === 0 ? 'success' : 'warn');
   setStatus(`Готово: ОК ${ok}, ошибок ${fail}`);
+  showResult(ok, fail);
 
   [btnAdd, btnScan, btnResetAll].forEach(b => b.disabled = false);
   if (printers.length > 0) updateResetBtn();
-
-  if (fail === 0) {
-    showToast(`Сброс выполнен на ${ok} принтере(ах). Выключите и включите принтер!`, 'success');
-  } else {
-    showToast(`Ошибок: ${fail}. Смотрите лог.`, 'error');
-  }
 }
 
 btnReset.addEventListener('click', () => {
