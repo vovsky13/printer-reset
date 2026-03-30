@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Сброс счётчика памперса — Epson &amp; Canon</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header>
+    <h1>Сброс счётчика памперса<br>
+      <span class="epson">Epson</span> &amp; <span class="canon">Canon</span>
+    </h1>
+    <p>Подключите принтер по USB и нажмите «Добавить принтер»</p>
+  </header>
+
+  <!-- Блок: браузер не поддерживает WebUSB -->
+  <div class="warning-block" id="webusbblock">
+    <strong>Браузер не поддерживает WebUSB</strong>
+    Используйте <strong>Google Chrome</strong> или <strong>Microsoft Edge</strong>.
+    Firefox и Safari не поддерживают WebUSB.
+  </div>
+
+  <!-- Принтеры -->
+  <div class="card">
+    <div class="card-title">Принтеры</div>
+
+    <div class="toolbar">
+      <button class="btn-primary" id="btn-add">
+        + Добавить принтер
+      </button>
+      <button class="btn-secondary" id="btn-scan">
+        Обновить список
+      </button>
+    </div>
+
+    <div style="height:14px"></div>
+    <div id="printer-list"></div>
+
+    <div id="no-usb" class="no-printers">
+      Принтеры не найдены — нажмите «Добавить принтер»
+    </div>
+
+    <div class="reset-toolbar">
+      <button class="btn-danger" id="btn-reset" disabled>
+        Сбросить выбранные
+      </button>
+      <button class="btn-danger-solid" id="btn-reset-all" disabled>
+        Сбросить ВСЕ
+      </button>
+    </div>
+  </div>
+
+  <!-- Лог -->
+  <div class="card">
+    <div class="card-title">Лог операций</div>
+    <div id="log"></div>
+  </div>
+
+  <!-- Статус -->
+  <div class="status-bar">
+    <span id="status">Готов</span>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
