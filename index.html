@@ -17,6 +17,15 @@
     <p>Подключите принтер по USB и нажмите «Добавить принтер»</p>
   </header>
 
+  <!-- Блок: Windows Print Spooler -->
+  <div class="warning-block" id="spoolerblock" style="display:block; background:#1a2a1a; border-color:#2ecc71; color:#aaffaa;">
+    <strong>Windows: отключите Print Spooler перед сбросом</strong>
+    Откройте <b>PowerShell от имени администратора</b> и выполните:<br>
+    <code style="background:#0a1a0a;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:6px;">Stop-Service -Name Spooler -Force</code><br>
+    После сброса включите обратно:<br>
+    <code style="background:#0a1a0a;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;">Start-Service -Name Spooler</code>
+  </div>
+
   <!-- Блок: браузер не поддерживает WebUSB -->
   <div class="warning-block" id="webusbblock">
     <strong>Браузер не поддерживает WebUSB</strong>

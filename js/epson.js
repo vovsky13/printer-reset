@@ -168,15 +168,7 @@ export async function resetWasteInk(device, log) {
   await withTimeout(device.claimInterface(iface.interfaceNumber), 6000);
 
   try {
-    log('Сброс USB-устройства...');
-    try { await withTimeout(device.reset(), 4000); } catch (_) {}
-    await sleep(300);
-
-    log('Инициализация принтера (ESC @)...');
-    await withTimeout(device.transferOut(epOut.endpointNumber, CMD_INIT));
-    await sleep(300);
-
-    log('Вход в Remote Mode...');
+    log('Вход в Remote Mode (без ESC @)...');
     await withTimeout(device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE));
     await sleep(200);
 
