@@ -1,7 +1,8 @@
-// Сброс счётчика памперса Epson через WebUSB
-// Протокол: ESC/P2 Remote Mode (REMOTE1) + команда EE W (запись EEPROM)
+// Сброс и чтение счётчика памперса Epson через WebUSB
+// Протокол: ESC/P2 Remote Mode (REMOTE1)
+// EE W — запись EEPROM, EE R — чтение EEPROM
 
-const CMD_INIT         = new Uint8Array([0x1B, 0x40]); // ESC @
+const CMD_INIT         = new Uint8Array([0x1B, 0x40]);
 const CMD_ENTER_REMOTE = new Uint8Array([
   0x1B, 0x28, 0x52, 0x08, 0x00, 0x00,
   0x52, 0x45, 0x4D, 0x4F, 0x54, 0x45, 0x31  // "REMOTE1"
@@ -11,30 +12,22 @@ const CMD_EXIT_REMOTE = new Uint8Array([
   0x45, 0x58, 0x49, 0x54  // "EXIT"
 ]);
 
-// Адреса EEPROM счётчиков памперса (большинство моделей Epson)
-const WASTE_INK_ADDRESSES = [
-  { name: 'Основной (lo)',    addr: 0x000D },
-  { name: 'Основной (hi)',    addr: 0x000E },
-  { name: 'Второй (lo)',      addr: 0x0010 },
-  { name: 'Второй (hi)',      addr: 0x0011 },
-  { name: 'Третий (lo)',      addr: 0x0062 },
-  { name: 'Третий (hi)',      addr: 0x0063 },
+// Счётчики памперса: пары lo+hi байт дают 16-битное значение
+// Типичный максимум до остановки принтера — около 8192 (0x2000)
+const COUNTERS = [
+  { label: 'Основной памперс',  addrLo: 0x000D, addrHi: 0x000E, max: 0x2000 },
+  { label: 'Второй памперс',    addrLo: 0x0010, addrHi: 0x0011, max: 0x2000 },
+  { label: 'Третий памперс',    addrLo: 0x0062, addrHi: 0x0063, max: 0x0800 },
 ];
 
-function buildEepromWrite(address, value) {
-  // payload: EE + W + 0x00 0x00 + addr_lo + addr_hi + value
-  const addrLo = address & 0xFF;
-  const addrHi = (address >> 8) & 0xFF;
-  const payload = new Uint8Array([0x45, 0x45, 0x57, 0x00, 0x00, addrLo, addrHi, value]);
+// ---- Построение команд Remote Mode ----
 
-  // packet: 2 байта длины payload (LE) + payload
+function wrapRemote(payload) {
   const packet = new Uint8Array(2 + payload.length);
   packet[0] = payload.length & 0xFF;
   packet[1] = (payload.length >> 8) & 0xFF;
   packet.set(payload, 2);
-
-  // cmd: ESC ( R + 2 байта длины packet (LE) + 0x00 + packet
-  const cmd = new Uint8Array(3 + 2 + 1 + packet.length);
+  const cmd = new Uint8Array(6 + packet.length);
   cmd.set([0x1B, 0x28, 0x52], 0);
   cmd[3] = packet.length & 0xFF;
   cmd[4] = (packet.length >> 8) & 0xFF;
@@ -43,56 +36,145 @@ function buildEepromWrite(address, value) {
   return cmd;
 }
 
-async function findBulkOut(device) {
+function buildEepromRead(address) {
+  const payload = new Uint8Array([
+    0x45, 0x45, 0x52,              // 'EE' + 'R'
+    0x00, 0x00,
+    address & 0xFF, (address >> 8) & 0xFF
+  ]);
+  return wrapRemote(payload);
+}
+
+function buildEepromWrite(address, value) {
+  const payload = new Uint8Array([
+    0x45, 0x45, 0x57,              // 'EE' + 'W'
+    0x00, 0x00,
+    address & 0xFF, (address >> 8) & 0xFF,
+    value
+  ]);
+  return wrapRemote(payload);
+}
+
+// ---- Helpers ----
+
+function findEndpoints(device) {
   for (const config of device.configurations) {
     for (const iface of config.interfaces) {
       for (const alt of iface.alternates) {
+        let epOut = null, epIn = null;
         for (const ep of alt.endpoints) {
-          if (ep.type === 'bulk' && ep.direction === 'out') {
-            return { iface, ep };
-          }
+          if (ep.type === 'bulk' && ep.direction === 'out') epOut = ep;
+          if (ep.type === 'bulk' && ep.direction === 'in')  epIn  = ep;
         }
+        if (epOut) return { iface, epOut, epIn };
       }
     }
   }
   throw new Error('Bulk OUT эндпойнт не найден');
 }
 
-async function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function openDevice(device) {
+  await device.open();
+  if (device.configuration === null) await device.selectConfiguration(1);
 }
 
-export async function resetWasteInk(device, log) {
-  log('Открытие устройства...');
-  await device.open();
+// ---- Публичное API ----
 
-  if (device.configuration === null) {
-    await device.selectConfiguration(1);
+/**
+ * Читает текущие значения счётчиков памперса.
+ * Возвращает массив { label, value, max, percent }
+ */
+export async function readCounters(device, log) {
+  log('Открытие устройства...');
+  await openDevice(device);
+
+  const { iface, epOut, epIn } = findEndpoints(device);
+  log(`Захват интерфейса ${iface.interfaceNumber}...`);
+  await device.claimInterface(iface.interfaceNumber);
+
+  const results = [];
+
+  try {
+    log('Инициализация...');
+    await device.transferOut(epOut.endpointNumber, CMD_INIT);
+    await sleep(300);
+
+    log('Вход в Remote Mode...');
+    await device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE);
+    await sleep(200);
+
+    for (const c of COUNTERS) {
+      // Читаем lo-байт
+      await device.transferOut(epOut.endpointNumber, buildEepromRead(c.addrLo));
+      await sleep(80);
+      let lo = 0;
+      if (epIn) {
+        try {
+          const resp = await device.transferIn(epIn.endpointNumber, 8);
+          lo = resp.data ? resp.data.getUint8(resp.data.byteLength - 1) : 0;
+        } catch (_) {}
+      }
+
+      // Читаем hi-байт
+      await device.transferOut(epOut.endpointNumber, buildEepromRead(c.addrHi));
+      await sleep(80);
+      let hi = 0;
+      if (epIn) {
+        try {
+          const resp = await device.transferIn(epIn.endpointNumber, 8);
+          hi = resp.data ? resp.data.getUint8(resp.data.byteLength - 1) : 0;
+        } catch (_) {}
+      }
+
+      const value   = (hi << 8) | lo;
+      const percent = Math.min(100, Math.round((value / c.max) * 100));
+      results.push({ label: c.label, value, max: c.max, percent });
+      log(`  ${c.label}: ${value} / ${c.max} (${percent}%)`);
+    }
+
+    log('Выход из Remote Mode...');
+    await device.transferOut(epOut.endpointNumber, CMD_EXIT_REMOTE);
+    await sleep(200);
+
+  } finally {
+    await device.releaseInterface(iface.interfaceNumber);
+    await device.close();
   }
 
-  const { iface, ep } = await findBulkOut(device);
+  return results;
+}
+
+/** Сбрасывает все счётчики памперса в 0. */
+export async function resetWasteInk(device, log) {
+  log('Открытие устройства...');
+  await openDevice(device);
+
+  const { iface, epOut } = findEndpoints(device);
   log(`Захват интерфейса ${iface.interfaceNumber}...`);
   await device.claimInterface(iface.interfaceNumber);
 
   try {
     log('Инициализация принтера (ESC @)...');
-    await device.transferOut(ep.endpointNumber, CMD_INIT);
+    await device.transferOut(epOut.endpointNumber, CMD_INIT);
     await sleep(300);
 
     log('Вход в Remote Mode...');
-    await device.transferOut(ep.endpointNumber, CMD_ENTER_REMOTE);
+    await device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE);
     await sleep(200);
 
     log('Сброс счётчиков EEPROM:');
-    for (const { name, addr } of WASTE_INK_ADDRESSES) {
-      const cmd = buildEepromWrite(addr, 0x00);
-      await device.transferOut(ep.endpointNumber, cmd);
-      await sleep(50);
-      log(`  Адрес 0x${addr.toString(16).padStart(4,'0').toUpperCase()} (${name}) → 0x00`);
+    for (const c of COUNTERS) {
+      for (const addr of [c.addrLo, c.addrHi]) {
+        await device.transferOut(epOut.endpointNumber, buildEepromWrite(addr, 0x00));
+        await sleep(50);
+      }
+      log(`  ${c.label} → 0`);
     }
 
     log('Выход из Remote Mode...');
-    await device.transferOut(ep.endpointNumber, CMD_EXIT_REMOTE);
+    await device.transferOut(epOut.endpointNumber, CMD_EXIT_REMOTE);
     await sleep(200);
 
     log('Готово!');

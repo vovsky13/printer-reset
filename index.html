@@ -45,6 +45,9 @@
     </div>
 
     <div class="reset-toolbar">
+      <button class="btn-secondary" id="btn-check" disabled>
+        Проверить заполненность
+      </button>
       <button class="btn-danger" id="btn-reset" disabled>
         Сбросить выбранные
       </button>
@@ -52,6 +55,12 @@
         Сбросить ВСЕ
       </button>
     </div>
+  </div>
+
+  <!-- Заполненность памперса -->
+  <div class="card" id="counters-card" style="display:none">
+    <div class="card-title">Заполненность памперса</div>
+    <div id="counters-list"></div>
   </div>
 
   <!-- Прогресс -->
