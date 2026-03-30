@@ -65,12 +65,13 @@ async function tryRead(device, epIn, maxBytes = 64) {
 export async function readCounters(device, log) {
   const pid = device.productId;
 
-  await device.open();
-  if (device.configuration === null) await device.selectConfiguration(1);
+  await withTimeout(device.open(), 6000);
+  if (device.configuration === null)
+    await withTimeout(device.selectConfiguration(1), 5000);
 
   const { iface, epOut, epIn } = findEndpoints(device);
   log(`Захват интерфейса ${iface.interfaceNumber}...`);
-  await device.claimInterface(iface.interfaceNumber);
+  await withTimeout(device.claimInterface(iface.interfaceNumber), 6000);
 
   const results = [];
 
@@ -132,12 +133,13 @@ export async function resetWasteInk(device, log) {
   const pid = device.productId;
 
   log('Открытие устройства...');
-  await device.open();
-  if (device.configuration === null) await device.selectConfiguration(1);
+  await withTimeout(device.open(), 6000);
+  if (device.configuration === null)
+    await withTimeout(device.selectConfiguration(1), 5000);
 
   const { iface, epOut } = findEndpoints(device);
   log(`Захват интерфейса ${iface.interfaceNumber}...`);
-  await device.claimInterface(iface.interfaceNumber);
+  await withTimeout(device.claimInterface(iface.interfaceNumber), 6000);
 
   try {
     if (CANON_G_SERIES.has(pid)) {

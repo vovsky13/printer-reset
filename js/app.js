@@ -217,6 +217,9 @@ async function doReset(targets) {
   countersCard.style.display = 'none';
   resultCard.style.display = 'none';
   [btnAdd, btnScan, btnCheck, btnReset, btnResetAll].forEach(b => b.disabled = true);
+  showProgress('Подключение к принтеру...', 5);
+  log('Начинаем сброс...', 'header');
+  await new Promise(r => setTimeout(r, 50)); // дать браузеру отрисовать UI
 
   let ok = 0, fail = 0;
   const total = targets.length;

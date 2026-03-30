@@ -87,8 +87,9 @@ function withTimeout(promise, ms = 5000) {
 }
 
 async function openDevice(device) {
-  await device.open();
-  if (device.configuration === null) await device.selectConfiguration(1);
+  await withTimeout(device.open(), 6000);
+  if (device.configuration === null)
+    await withTimeout(device.selectConfiguration(1), 5000);
 }
 
 // ---- Публичное API ----
@@ -103,7 +104,7 @@ export async function readCounters(device, log) {
 
   const { iface, epOut, epIn } = findEndpoints(device, log);
   log(`Захват интерфейса ${iface.interfaceNumber}...`);
-  await device.claimInterface(iface.interfaceNumber);
+  await withTimeout(device.claimInterface(iface.interfaceNumber), 6000);
 
   const results = [];
 
@@ -164,7 +165,7 @@ export async function resetWasteInk(device, log) {
 
   const { iface, epOut } = findEndpoints(device);
   log(`Захват интерфейса ${iface.interfaceNumber}...`);
-  await device.claimInterface(iface.interfaceNumber);
+  await withTimeout(device.claimInterface(iface.interfaceNumber), 6000);
 
   try {
     log('Инициализация принтера (ESC @)...');
