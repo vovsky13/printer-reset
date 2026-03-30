@@ -168,7 +168,11 @@ export async function resetWasteInk(device, log) {
   await withTimeout(device.claimInterface(iface.interfaceNumber), 6000);
 
   try {
-    log('Вход в Remote Mode (без ESC @)...');
+    log('Очистка эндпойнта (clearHalt)...');
+    try { await withTimeout(device.clearHalt('out', epOut.endpointNumber), 3000); } catch (_) {}
+    await sleep(100);
+
+    log('Вход в Remote Mode...');
     await withTimeout(device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE));
     await sleep(200);
 
