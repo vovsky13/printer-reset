@@ -75,6 +75,16 @@ function findEndpoints(device) {
 
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Обёртка с таймаутом — если принтер не ответил за ms, бросаем ошибку
+function withTimeout(promise, ms = 5000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Таймаут: принтер не ответил за ${ms / 1000} сек`)), ms)
+    ),
+  ]);
+}
+
 async function openDevice(device) {
   await device.open();
   if (device.configuration === null) await device.selectConfiguration(1);
@@ -98,32 +108,32 @@ export async function readCounters(device, log) {
 
   try {
     log('Инициализация...');
-    await device.transferOut(epOut.endpointNumber, CMD_INIT);
+    await withTimeout(device.transferOut(epOut.endpointNumber, CMD_INIT));
     await sleep(300);
 
     log('Вход в Remote Mode...');
-    await device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE);
+    await withTimeout(device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE));
     await sleep(200);
 
     for (const c of COUNTERS) {
       // Читаем lo-байт
-      await device.transferOut(epOut.endpointNumber, buildEepromRead(c.addrLo));
+      await withTimeout(device.transferOut(epOut.endpointNumber, buildEepromRead(c.addrLo)));
       await sleep(80);
       let lo = 0;
       if (epIn) {
         try {
-          const resp = await device.transferIn(epIn.endpointNumber, 8);
+          const resp = await withTimeout(device.transferIn(epIn.endpointNumber, 8), 2000);
           lo = resp.data ? resp.data.getUint8(resp.data.byteLength - 1) : 0;
         } catch (_) {}
       }
 
       // Читаем hi-байт
-      await device.transferOut(epOut.endpointNumber, buildEepromRead(c.addrHi));
+      await withTimeout(device.transferOut(epOut.endpointNumber, buildEepromRead(c.addrHi)));
       await sleep(80);
       let hi = 0;
       if (epIn) {
         try {
-          const resp = await device.transferIn(epIn.endpointNumber, 8);
+          const resp = await withTimeout(device.transferIn(epIn.endpointNumber, 8), 2000);
           hi = resp.data ? resp.data.getUint8(resp.data.byteLength - 1) : 0;
         } catch (_) {}
       }
@@ -135,7 +145,7 @@ export async function readCounters(device, log) {
     }
 
     log('Выход из Remote Mode...');
-    await device.transferOut(epOut.endpointNumber, CMD_EXIT_REMOTE);
+    await withTimeout(device.transferOut(epOut.endpointNumber, CMD_EXIT_REMOTE));
     await sleep(200);
 
   } finally {
@@ -157,24 +167,24 @@ export async function resetWasteInk(device, log) {
 
   try {
     log('Инициализация принтера (ESC @)...');
-    await device.transferOut(epOut.endpointNumber, CMD_INIT);
+    await withTimeout(device.transferOut(epOut.endpointNumber, CMD_INIT));
     await sleep(300);
 
     log('Вход в Remote Mode...');
-    await device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE);
+    await withTimeout(device.transferOut(epOut.endpointNumber, CMD_ENTER_REMOTE));
     await sleep(200);
 
     log('Сброс счётчиков EEPROM:');
     for (const c of COUNTERS) {
       for (const addr of [c.addrLo, c.addrHi]) {
-        await device.transferOut(epOut.endpointNumber, buildEepromWrite(addr, 0x00));
+        await withTimeout(device.transferOut(epOut.endpointNumber, buildEepromWrite(addr, 0x00)));
         await sleep(50);
       }
       log(`  ${c.label} → 0`);
     }
 
     log('Выход из Remote Mode...');
-    await device.transferOut(epOut.endpointNumber, CMD_EXIT_REMOTE);
+    await withTimeout(device.transferOut(epOut.endpointNumber, CMD_EXIT_REMOTE));
     await sleep(200);
 
     log('Готово!');

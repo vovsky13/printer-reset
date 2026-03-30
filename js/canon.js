@@ -39,6 +39,15 @@ function findEndpoints(device) {
 
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+function withTimeout(promise, ms = 5000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Таймаут: принтер не ответил за ${ms / 1000} сек`)), ms)
+    ),
+  ]);
+}
+
 async function tryRead(device, epIn, maxBytes = 64) {
   if (!epIn) return null;
   try {
@@ -68,7 +77,7 @@ export async function readCounters(device, log) {
   try {
     if (CANON_G_SERIES.has(pid)) {
       log('G-серия: запрос счётчика через PJL...');
-      await device.transferOut(epOut.endpointNumber, PJL_READ);
+      await withTimeout(device.transferOut(epOut.endpointNumber, PJL_READ));
       await sleep(400);
       const data = await tryRead(device, epIn, 256);
 
@@ -87,11 +96,11 @@ export async function readCounters(device, log) {
 
     } else {
       log('iP/MG/MP: вход в сервисный режим...');
-      await device.transferOut(epOut.endpointNumber, SERVICE_ENTER);
+      await withTimeout(device.transferOut(epOut.endpointNumber, SERVICE_ENTER));
       await sleep(300);
 
       for (const [i, cmd] of [[1, ABSORBER_READ_1], [2, ABSORBER_READ_2]]) {
-        await device.transferOut(epOut.endpointNumber, cmd);
+        await withTimeout(device.transferOut(epOut.endpointNumber, cmd));
         await sleep(200);
         const data = await tryRead(device, epIn, 32);
 
@@ -106,7 +115,7 @@ export async function readCounters(device, log) {
       }
 
       log('Выход из сервисного режима...');
-      await device.transferOut(epOut.endpointNumber, SERVICE_EXIT);
+      await withTimeout(device.transferOut(epOut.endpointNumber, SERVICE_EXIT));
       await sleep(200);
     }
 
@@ -133,22 +142,22 @@ export async function resetWasteInk(device, log) {
   try {
     if (CANON_G_SERIES.has(pid)) {
       log('G-серия (MegaTank) — сброс PJL...');
-      await device.transferOut(epOut.endpointNumber, PJL_RESET);
+      await withTimeout(device.transferOut(epOut.endpointNumber, PJL_RESET));
       await sleep(300);
-      await device.transferOut(epOut.endpointNumber, G_RESET);
+      await withTimeout(device.transferOut(epOut.endpointNumber, G_RESET));
       await sleep(200);
     } else {
       log('iP/MG/MP — вход в сервисный режим...');
-      await device.transferOut(epOut.endpointNumber, SERVICE_ENTER);
+      await withTimeout(device.transferOut(epOut.endpointNumber, SERVICE_ENTER));
       await sleep(300);
       log('Сброс основного счётчика...');
-      await device.transferOut(epOut.endpointNumber, ABSORBER_RESET_1);
+      await withTimeout(device.transferOut(epOut.endpointNumber, ABSORBER_RESET_1));
       await sleep(200);
       log('Сброс резервного счётчика...');
-      await device.transferOut(epOut.endpointNumber, ABSORBER_RESET_2);
+      await withTimeout(device.transferOut(epOut.endpointNumber, ABSORBER_RESET_2));
       await sleep(200);
       log('Выход из сервисного режима...');
-      await device.transferOut(epOut.endpointNumber, SERVICE_EXIT);
+      await withTimeout(device.transferOut(epOut.endpointNumber, SERVICE_EXIT));
       await sleep(200);
     }
 
