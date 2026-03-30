@@ -57,12 +57,13 @@ function buildEepromWrite(address, value) {
 
 // ---- Helpers ----
 
-function findEndpoints(device) {
+function findEndpoints(device, log) {
   for (const config of device.configurations) {
     for (const iface of config.interfaces) {
       for (const alt of iface.alternates) {
         let epOut = null, epIn = null;
         for (const ep of alt.endpoints) {
+          log && log(`  Эндпойнт: ${ep.direction} #${ep.endpointNumber} тип=${ep.type} размер=${ep.packetSize}`);
           if (ep.type === 'bulk' && ep.direction === 'out') epOut = ep;
           if (ep.type === 'bulk' && ep.direction === 'in')  epIn  = ep;
         }
@@ -100,7 +101,7 @@ export async function readCounters(device, log) {
   log('Открытие устройства...');
   await openDevice(device);
 
-  const { iface, epOut, epIn } = findEndpoints(device);
+  const { iface, epOut, epIn } = findEndpoints(device, log);
   log(`Захват интерфейса ${iface.interfaceNumber}...`);
   await device.claimInterface(iface.interfaceNumber);
 

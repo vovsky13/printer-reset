@@ -3,8 +3,8 @@ export const EPSON_VID = 0x04B8;
 export const CANON_VID = 0x04A9;
 
 export const EPSON_MODELS = {
-  0x08A1: "Epson L100 / L200",
-  0x08A8: "Epson L300 / L350 / L355",
+  0x08A1: "Epson L100 / L200 / L350",
+  0x08A8: "Epson L300 / L355",
   0x08A9: "Epson L455",
   0x08B0: "Epson L1300",
   0x08B4: "Epson L3050 / L3060 / L3070",
