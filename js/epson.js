@@ -163,11 +163,15 @@ export async function resetWasteInk(device, log) {
   log('Открытие устройства...');
   await openDevice(device);
 
-  const { iface, epOut } = findEndpoints(device);
+  const { iface, epOut } = findEndpoints(device, log);
   log(`Захват интерфейса ${iface.interfaceNumber}...`);
   await withTimeout(device.claimInterface(iface.interfaceNumber), 6000);
 
   try {
+    log('Сброс USB-устройства...');
+    try { await withTimeout(device.reset(), 4000); } catch (_) {}
+    await sleep(300);
+
     log('Инициализация принтера (ESC @)...');
     await withTimeout(device.transferOut(epOut.endpointNumber, CMD_INIT));
     await sleep(300);
